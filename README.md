@@ -19,15 +19,33 @@
 
 ## 安装
 
-1. 下载本仓库,把 **MathTools 目录内全部文件**复制到 SillyTavern 的扩展目录:
+### 方式一:酒馆内直接安装(推荐)
+
+1. 打开酒馆 **扩展(Extensions)→ 安装扩展(Install extension)**
+2. 粘贴仓库地址:
 
    ```
-   SillyTavern/public/scripts/extensions/third-party/MathTools/
+   https://github.com/chtcrack/MathTools-SillyTavern-Extension
    ```
 
-2. 刷新酒馆页面(F5),扩展自动加载,设置面板出现在 **扩展 → 🧮 MathTools 数学计算**。
+3. 选择 **给所有人安装**(全局,所有用户可用)或 **只给我安装**(仅当前用户)
+4. 安装完成后刷新页面,设置面板出现在 **扩展 → 🧮 MathTools 数学计算**
 
-3. (可选)要让原生函数工具生效:进入 **AI 响应配置 → Chat Completion → Function Calling**,勾选启用。标记回退机制不需要这一步。
+> ⚠️ 如果之前手动复制过旧版,安装新版前先删除旧的 `public/scripts/extensions/third-party/MathTools/` 目录,避免新旧两套同时加载。
+
+### 方式二:手动复制
+
+把本仓库目录内全部文件复制到 SillyTavern 的扩展目录:
+
+```
+SillyTavern/public/scripts/extensions/third-party/MathTools/
+```
+
+然后刷新酒馆页面(F5),扩展自动加载。
+
+### 启用原生函数工具(可选)
+
+要让 `math_evaluate` / `math_execute_code` 原生工具生效:进入 **AI 响应配置 → Chat Completion → Function Calling**,勾选启用。标记回退机制不需要这一步。
 
 ## 使用
 
