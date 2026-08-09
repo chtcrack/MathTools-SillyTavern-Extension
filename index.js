@@ -19,7 +19,11 @@ import { tryEvaluateMath } from './math-parser.js';
 import { processMarkers, processMarkersDom, escapeHtml, injectMathInstructions } from './core.js';
 
 const extensionName = 'MathTools';
-const extensionFolderPath = 'third-party/MathTools';
+
+// 从 import.meta.url 动态推导扩展目录 (适配任意安装目录名, 如 third-party/MathTools 或 third-party/MathTools-SillyTavern-Extension)
+const scriptPath = typeof import.meta !== 'undefined' && import.meta.url ? import.meta.url : '';
+const pathMatch = scriptPath.match(/scripts\/extensions\/(.+)\/index\.js/);
+const extensionFolderPath = pathMatch ? pathMatch[1] : 'third-party/MathTools';
 
 const defaultSettings = {
     inject_prompt: true,        // 注入计算协议提示
@@ -314,16 +318,21 @@ function onSettingsInput() {
 }
 
 async function initUI() {
-    const settingsHtml = await renderExtensionTemplateAsync(extensionFolderPath, 'settings');
-    $('#extensions_settings2').append(settingsHtml);
+    try {
+        const settingsHtml = await renderExtensionTemplateAsync(extensionFolderPath, 'settings');
+        $('#extensions_settings2').append(settingsHtml);
 
-    $('#mt_inject_prompt').prop('checked', settings.inject_prompt).on('input', onSettingsInput);
-    $('#mt_replace_markers').prop('checked', settings.replace_markers).on('input', onSettingsInput);
-    $('#mt_native_tools').prop('checked', settings.native_tools).on('input', onSettingsInput);
-    $('#mt_strict_mode').prop('checked', settings.strict_mode).on('input', onSettingsInput);
-    $('#mt_keyword_boost').prop('checked', settings.keyword_boost).on('input', onSettingsInput);
-    $('#mt_code_timeout').val(settings.code_timeout).on('input', onSettingsInput);
-    $('#mt_instruction').val(settings.instruction).on('input', onSettingsInput);
+        $('#mt_inject_prompt').prop('checked', settings.inject_prompt).on('input', onSettingsInput);
+        $('#mt_replace_markers').prop('checked', settings.replace_markers).on('input', onSettingsInput);
+        $('#mt_native_tools').prop('checked', settings.native_tools).on('input', onSettingsInput);
+        $('#mt_strict_mode').prop('checked', settings.strict_mode).on('input', onSettingsInput);
+        $('#mt_keyword_boost').prop('checked', settings.keyword_boost).on('input', onSettingsInput);
+        $('#mt_code_timeout').val(settings.code_timeout).on('input', onSettingsInput);
+        $('#mt_instruction').val(settings.instruction).on('input', onSettingsInput);
+    } catch (error) {
+        // 设置面板加载失败不阻塞核心功能 (工具注册/事件绑定/标记替换)
+        console.warn('[MathTools] 设置面板加载失败, 核心功能不受影响:', error);
+    }
     renderLog();
 }
 
