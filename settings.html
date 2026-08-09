@@ -1,0 +1,58 @@
+<div class="math_tools_settings">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b>🧮 MathTools 数学计算</b>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        <div class="inline-drawer-content">
+            <small class="math_tools_hint">让模型在 RP 中把数学计算交给工具执行, 不再心算出错。支持双机制: 标记替换(任何后端) + 原生函数工具(需开启 Function Calling)。</small>
+            <div class="math_tools_row">
+                <label class="checkbox_label" for="mt_inject_prompt">
+                    <input type="checkbox" id="mt_inject_prompt">
+                    <span>注入计算协议提示(教模型使用计算标记)</span>
+                </label>
+            </div>
+            <div class="math_tools_row">
+                <label class="checkbox_label" for="mt_replace_markers">
+                    <input type="checkbox" id="mt_replace_markers">
+                    <span>生成后自动计算并替换 ⟦calc⟧ / ⟦code⟧ 标记</span>
+                </label>
+            </div>
+            <div class="math_tools_row">
+                <label class="checkbox_label" for="mt_native_tools">
+                    <input type="checkbox" id="mt_native_tools">
+                    <span>注册原生函数工具 math_evaluate / math_execute_code</span>
+                </label>
+            </div>
+            <div class="math_tools_row">
+                <label class="checkbox_label" for="mt_strict_mode">
+                    <input type="checkbox" id="mt_strict_mode">
+                    <span><b>严格模式</b>: 每轮强制调用工具(tool_choice=required, 适合战斗/经营轮; 纯对话时建议关闭)</span>
+                </label>
+            </div>
+            <div class="math_tools_row">
+                <label class="checkbox_label" for="mt_keyword_boost">
+                    <input type="checkbox" id="mt_keyword_boost">
+                    <span>用户消息含计算关键词(骰/伤害/多少/概率等)时注入强提醒</span>
+                </label>
+            </div>
+            <div class="math_tools_row">
+                <label for="mt_code_timeout">代码执行超时(毫秒)</label>
+                <input type="number" id="mt_code_timeout" min="1000" step="1000" class="text_pole" style="width: 120px;">
+            </div>
+            <div class="math_tools_row">
+                <label for="mt_instruction">计算协议提示词(注入到每轮请求)</label>
+                <textarea id="mt_instruction" rows="6" class="text_pole" style="width: 100%; font-family: monospace; font-size: 12px;"></textarea>
+            </div>
+            <div class="math_tools_row">
+                <details>
+                    <summary>📋 计算日志</summary>
+                    <div id="mt_log" class="math_tools_log"></div>
+                </details>
+            </div>
+            <div class="math_tools_row math_tools_tools">
+                <small>手动测试: <code>/math 2d6+5</code> 或 <code>/mathexec return 6*7</code></small>
+            </div>
+        </div>
+    </div>
+</div>
