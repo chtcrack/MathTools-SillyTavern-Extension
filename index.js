@@ -8,7 +8,7 @@
  *    - 生成完成后自动计算并替换为精确结果, 保存进聊天
  * 2. 原生函数工具(需在酒馆开启 Function Calling):
  *    - math_evaluate: 数学表达式计算
- *    - math_execute_code: 沙箱 JS 代码执行 (Web Worker, 无 DOM/网络)
+ *    - math_execute_code: 沙箱 JS 代码执行 (Web Worker, 无 DOM, 可发网络请求)
  */
 import { eventSource, event_types, chat, saveChatConditional } from '../../../../script.js';
 import { extension_settings, renderExtensionTemplateAsync } from '../../../extensions.js';
@@ -60,7 +60,7 @@ function loadSettings() {
 /* ==================== 沙箱代码执行 (Web Worker) ==================== */
 
 /**
- * 在 Web Worker 沙箱中执行 JS 代码 (无 DOM/无 window, 可超时终止)。
+ * 在 Web Worker 沙箱中执行 JS 代码 (无 DOM/无 window, 可超时终止; 注意 Worker 内 fetch/WebSocket 可用, 非完全隔离)。
  * @param {string} code 代码, 用 return 返回结果
  * @param {number} timeoutMs 超时毫秒
  * @returns {Promise<{ok: boolean, result?: string, error?: string}>}
