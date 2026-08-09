@@ -38,7 +38,7 @@
 把本仓库目录内全部文件复制到 SillyTavern 的扩展目录:
 
 ```
-SillyTavern/public/scripts/extensions/third-party/MathTools/
+SillyTavern/public/scripts/extensions/third-party/MathTools-SillyTavern-Extension/
 ```
 
 然后刷新酒馆页面(F5),扩展自动加载。
