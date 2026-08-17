@@ -13,6 +13,7 @@
 - 🧮 **数学表达式**:四则、幂 `^`/`**`、取模 `mod`、百分比 `50%`、阶乘 `5!`、变量 `a=5; a*2`
 - 📊 **函数**:`sin cos tan sqrt log ln log10 exp abs floor ceil round trunc min max pow random randint gcd lcm comb perm fac`,常量 `pi e tau`
 - 💻 **代码执行**:`⟦code⟧...⟦/code⟧` 内写 JavaScript(Web Worker 沙箱,无 DOM/页面数据,超时自动终止;**沙箱内可发起网络请求,不是完全隔离,见下方安全警告**),支持循环/模拟/统计等复杂计算
+- 🌐 **网络搜索**(可选,默认关闭):对接 Hermes 扩展桥,注册 `web_search` 工具 + `⟦search⟧关键词⟦/search⟧` 标记,Google 实时搜索返回结果摘要——攻略、设定、实时资料不用模型凭记忆编造
 - 🛡️ **容错**:自动剥离模型混进表达式的 HTML 标签(`<em>` 等)、转换中文符号(`× ÷ － ＋`)、容忍 `165*15=2475` 这类"等式"写法(取左边计算,纠正模型心算的错误结果)
 - ⚡ **四层指令注入**:协议放 system 首位 + 计算关键词(骰/伤害/多少/概率等)触发末尾强提醒 + "禁止心算"强制措辞 + **严格模式**(`tool_choice='required'` 每轮强制调工具,适合战斗/经营轮)
 - 📋 **计算日志**:设置面板查看每次计算/错误记录,点击可复制
@@ -100,6 +101,7 @@ SillyTavern/public/scripts/extensions/third-party/MathTools-SillyTavern-Extensio
 | 注册原生函数工具 | 注册 `math_evaluate` / `math_execute_code`(默认开,需 Function Calling) |
 | **严格模式** | `tool_choice='required'` 每轮强制调用工具,战斗/经营轮用;纯对话建议关闭 |
 | 关键词强提醒 | 用户消息含"骰/伤害/多少/概率"等词时注入额外提醒(默认开) |
+| **网络搜索** | 对接扩展桥 `web_search` + `⟦search⟧` 标记(**默认关闭**;需勾选并填扩展桥地址 `http://localhost:8643` 与 Bearer token,token 见 `~/.hermes/scripts/.ext-bridge-token`) |
 | 代码执行超时 | Web Worker 沙箱执行时限,默认 10 秒 |
 
 ## 表达式语法速查

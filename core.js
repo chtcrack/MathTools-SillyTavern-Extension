@@ -6,6 +6,7 @@ import { tryEvaluateMath } from './math-parser.js';
 
 export const CALC_RE = /⟦calc⟧([\s\S]*?)⟦\/calc⟧/g;
 export const CODE_RE = /⟦code⟧([\s\S]*?)⟦\/code⟧/g;
+export const SEARCH_RE = /⟦search⟧([\s\S]*?)⟦\/search⟧/g;
 
 const HTML_ENTITIES = {
     '&lt;': '<', '&gt;': '>', '&amp;': '&', '&quot;': '"',
@@ -81,11 +82,12 @@ export function injectMathInstructions(messages, settings) {
  * @param {string} text 原始文本
  * @param {object} deps 依赖注入
  * @param {function(string): Promise<{ok: boolean, result?: string, error?: string}>} deps.executeCode 执行 JS 代码
+ * @param {function(string): Promise<{ok: boolean, text?: string, error?: string}>} [deps.search] 网络搜索 (可选, 未提供则 ⟦search⟧ 原样保留)
  * @param {function(string): {ok: boolean, text?: string, error?: string}} [deps.evaluate] 计算表达式
  * @returns {Promise<{text: string, changed: boolean, logs: string[]}>}
  */
 export async function processMarkers(text, deps) {
-    const { executeCode, evaluate = (expr) => tryEvaluateMath(expr) } = deps;
+    const { executeCode, evaluate = (expr) => tryEvaluateMath(expr), search } = deps;
     const logs = [];
     let changed = false;
 
@@ -111,6 +113,28 @@ export async function processMarkers(text, deps) {
         newText = newText.slice(0, index) + replacement + newText.slice(index + full.length);
     }
 
+    // 搜索标记 (可选功能, 未启用/未配置 search 时原样保留)
+    if (typeof search === 'function') {
+        const searchMatches = [...newText.matchAll(SEARCH_RE)];
+        const searchReplacements = [];
+        for (const m of searchMatches) {
+            const query = m[1].trim();
+            if (!query) continue;
+            const r = await search(query);
+            if (r.ok) {
+                logs.push(`[搜索] ${query} → ${(r.text || '').slice(0, 80).replace(/\n/g, ' ')}`);
+                changed = true;
+                searchReplacements.push({ index: m.index, full: m[0], replacement: `🔍 **${r.text}**` });
+            } else {
+                logs.push(`[搜索失败] ${query} → ${r.error}`);
+            }
+        }
+        for (let i = searchReplacements.length - 1; i >= 0; i--) {
+            const { index, full, replacement } = searchReplacements[i];
+            newText = newText.slice(0, index) + replacement + newText.slice(index + full.length);
+        }
+    }
+
     // 表达式: 同步替换 (解析失败时保留原文, 错误只记日志, 不污染 RP 消息)
     newText = newText.replace(CALC_RE, (match, expr) => {
         const r = evaluate(expr);
@@ -133,7 +157,7 @@ export async function processMarkers(text, deps) {
  * @returns {Promise<string>}
  */
 export async function processMarkersDom(html, deps) {
-    const { executeCode, evaluate = (expr) => tryEvaluateMath(expr) } = deps;
+    const { executeCode, evaluate = (expr) => tryEvaluateMath(expr), search } = deps;
 
     // 代码块 (从后往前替换避免 index 错位)
     let newHtml = html;
@@ -149,6 +173,23 @@ export async function processMarkersDom(html, deps) {
     for (let i = codeReplacements.length - 1; i >= 0; i--) {
         const { index, full, replacement } = codeReplacements[i];
         newHtml = newHtml.slice(0, index) + replacement + newHtml.slice(index + full.length);
+    }
+
+    // 搜索标记 (可选; 与 processMarkers 共用缓存, 不会重复请求)
+    if (typeof search === 'function') {
+        const searchMatches = [...newHtml.matchAll(SEARCH_RE)];
+        const searchReplacements = [];
+        for (const m of searchMatches) {
+            const query = decodeHtml(m[1]).trim();
+            if (!query) continue;
+            const r = await search(query);
+            if (!r.ok) continue; // 失败保留原文
+            searchReplacements.push({ index: m.index, full: m[0], replacement: `<span class="mt_result" title="搜索: ${escapeHtml(query)}">🔍 ${escapeHtml(r.text)}</span>` });
+        }
+        for (let i = searchReplacements.length - 1; i >= 0; i--) {
+            const { index, full, replacement } = searchReplacements[i];
+            newHtml = newHtml.slice(0, index) + replacement + newHtml.slice(index + full.length);
+        }
     }
 
     // 表达式: 同步替换 (解析失败时保留原文)

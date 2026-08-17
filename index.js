@@ -31,6 +31,9 @@ const defaultSettings = {
     native_tools: true,         // 注册原生函数工具
     strict_mode: false,         // 严格模式: 每轮强制调用工具 (tool_choice=required)
     keyword_boost: true,        // 用户消息含计算关键词时注入强提醒
+    search_enabled: false,      // 网络搜索 (扩展桥) — 默认关闭, 勾选启用
+    bridge_url: 'http://localhost:8643',  // 扩展桥地址
+    bridge_token: '',           // 扩展桥 Bearer token
     code_timeout: 10000,        // 代码执行超时 ms
     instruction: [
         '【强制计算协议 - MathTools】你被系统禁止心算任何数值。',
@@ -50,11 +53,67 @@ const defaultSettings = {
 
 // 运行时状态
 const calcLog = [];
+const searchCache = new Map(); // query -> {r, at} — 搜索结果缓存 5 分钟, 避免消息文本/DOM 双路径重复请求
 let settings = null;
 
 /** 从扩展设置读取配置 */
 function loadSettings() {
     settings = Object.assign({}, defaultSettings, extension_settings[extensionName] || {});
+    // 搜索启用时, 把搜索协议追加进注入指令 (幂等)
+    if (settings.search_enabled && settings.bridge_token && !settings.instruction.includes('⟦search⟧')) {
+        settings.instruction += '\n【搜索】需要实时/外部资料(攻略、设定、当前事件、数值表)时, 用 ⟦search⟧关键词⟦/search⟧ 标记或调用 web_search 工具获取真实信息, 不要凭记忆编造。';
+    }
+}
+
+/* ==================== 扩展桥搜索 ==================== */
+
+/**
+ * 调用扩展桥 /api/search 执行 Google 搜索 (需 Chrome 扩展桥服务在线)。
+ * @param {string} query 搜索关键词
+ * @returns {Promise<{ok: boolean, text?: string, error?: string}>}
+ */
+async function bridgeSearch(query) {
+    try {
+        const base = (settings.bridge_url || 'http://localhost:8643').replace(/\/+$/, '');
+        const response = await fetch(`${base}/api/search`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${settings.bridge_token || ''}`,
+            },
+            body: JSON.stringify({ query }),
+        });
+        if (!response.ok) {
+            return { ok: false, error: `扩展桥 HTTP ${response.status}${response.status === 401 ? ' (token 无效)' : ''}` };
+        }
+        const data = await response.json();
+        if (!data.ok) return { ok: false, error: data.error || '搜索失败' };
+        const r = data.result || {};
+        let out = String(r.text || '').trim();
+        const links = (r.meta && Array.isArray(r.meta.links)) ? r.meta.links : [];
+        // 过滤 Google 内部导航链接, 保留真实结果
+        const useful = links.filter(l => l && l.url && !/google\.com\/(webhp|search|intl|accounts|support|preferences)/.test(l.url) && l.text);
+        if (!out && useful.length) {
+            out = useful.slice(0, 8).map(l => `${l.text}\n${l.url}`).join('\n');
+        }
+        if (!out) out = '(无文本结果)';
+        return { ok: true, text: out.slice(0, 1500) };
+    } catch (error) {
+        return { ok: false, error: `扩展桥连接失败: ${error && error.message || error} (确认扩展桥服务运行: ${settings.bridge_url})` };
+    }
+}
+
+/** 带缓存的搜索 (5 分钟 TTL) */
+async function cachedSearch(query) {
+    const hit = searchCache.get(query);
+    if (hit && Date.now() - hit.at < 5 * 60 * 1000) return hit.r;
+    const r = await bridgeSearch(query);
+    searchCache.set(query, { r, at: Date.now() });
+    if (searchCache.size > 100) {
+        const first = searchCache.keys().next().value;
+        searchCache.delete(first);
+    }
+    return r;
 }
 
 /* ==================== 沙箱代码执行 (Web Worker) ==================== */
@@ -146,6 +205,10 @@ async function onMessageReceived(messageId) {
         executeCode: (code) => executeCodeSandbox(code, settings.code_timeout),
         evaluate: (expr) => tryEvaluateMath(expr),
     };
+    // 搜索功能: 启用且配置了 token 时才注入 (默认关闭)
+    if (settings.search_enabled && settings.bridge_token) {
+        deps.search = cachedSearch;
+    }
     const result = await processMarkers(message.mes, deps);
 
     // 记录日志 (无论是否替换成功, 失败也要能看到原因)
@@ -181,6 +244,7 @@ function registerNativeTools() {
     if (!settings.native_tools) {
         ToolManager.unregisterFunctionTool('math_evaluate');
         ToolManager.unregisterFunctionTool('math_execute_code');
+        ToolManager.unregisterFunctionTool('web_search');
         return;
     }
 
@@ -250,6 +314,39 @@ function registerNativeTools() {
         },
         shouldRegister: () => ToolManager.isToolCallingSupported(),
     });
+
+    // 网络搜索工具 (扩展桥; 默认关闭, 需在设置里勾选并填 token)
+    ToolManager.registerFunctionTool({
+        name: 'web_search',
+        displayName: '网络搜索',
+        description: [
+            '通过 Google 搜索实时信息并返回结果摘要。',
+            '用于需要最新或外部资料时: 游戏攻略、角色/设定查询、当前事件、数值表、百科资料等。',
+            '返回内容可能较长, 提取与当前话题相关的信息使用, 不要编造搜索结果中不存在的细节。',
+        ].join(' '),
+        parameters: Object.freeze({
+            $schema: 'http://json-schema.org/draft-04/schema#',
+            type: 'object',
+            properties: {
+                query: {
+                    type: 'string',
+                    description: '搜索关键词, 如 "暗黑地牢 怪癖 效果 列表"',
+                },
+            },
+            required: ['query'],
+        }),
+        action: async (args) => {
+            if (!args || typeof args.query !== 'string' || !args.query.trim()) {
+                throw new Error('缺少 query 参数');
+            }
+            const r = await cachedSearch(args.query.trim());
+            if (!r.ok) {
+                throw new Error(r.error);
+            }
+            return r.text;
+        },
+        shouldRegister: () => settings.search_enabled && Boolean(settings.bridge_token) && ToolManager.isToolCallingSupported(),
+    });
 }
 
 /* ==================== 斜杠命令 ==================== */
@@ -282,6 +379,21 @@ function registerSlashCommands() {
         },
         helpString: '在沙箱中执行 JavaScript 代码并返回结果',
     }));
+    SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+        name: 'search',
+        aliases: ['websearch'],
+        callback: async (args, value) => {
+            if (!settings.search_enabled || !settings.bridge_token) return '⚠️ 网络搜索未启用: 请在 MathTools 设置里勾选"网络搜索"并填写扩展桥 token';
+            if (!value || !value.trim()) return '用法: /search 关键词';
+            const r = await cachedSearch(value.trim());
+            if (!r.ok) return `⚠️ ${r.error}`;
+            calcLog.unshift(`[搜索命令] ${value.trim().slice(0, 60)} → ${r.text.slice(0, 60)}...`);
+            calcLog.length = Math.min(calcLog.length, 50);
+            renderLog();
+            return `🔍 ${r.text}`;
+        },
+        helpString: '通过扩展桥搜索实时信息 (需在设置中启用)',
+    }));
 }
 
 /* ==================== 设置 UI ==================== */
@@ -311,6 +423,9 @@ function onSettingsInput() {
     settings.native_tools = $('#mt_native_tools').prop('checked');
     settings.strict_mode = $('#mt_strict_mode').prop('checked');
     settings.keyword_boost = $('#mt_keyword_boost').prop('checked');
+    settings.search_enabled = $('#mt_search_enabled').prop('checked');
+    settings.bridge_url = $('#mt_bridge_url').val().trim();
+    settings.bridge_token = $('#mt_bridge_token').val().trim();
     settings.code_timeout = Math.max(1000, Number($('#mt_code_timeout').val()) || 10000);
     settings.instruction = $('#mt_instruction').val();
     extension_settings[extensionName] = settings;
@@ -327,8 +442,27 @@ async function initUI() {
         $('#mt_native_tools').prop('checked', settings.native_tools).on('input', onSettingsInput);
         $('#mt_strict_mode').prop('checked', settings.strict_mode).on('input', onSettingsInput);
         $('#mt_keyword_boost').prop('checked', settings.keyword_boost).on('input', onSettingsInput);
+        $('#mt_search_enabled').prop('checked', settings.search_enabled).on('input', onSettingsInput);
+        $('#mt_bridge_url').val(settings.bridge_url).on('input', onSettingsInput);
+        $('#mt_bridge_token').val(settings.bridge_token).on('input', onSettingsInput);
         $('#mt_code_timeout').val(settings.code_timeout).on('input', onSettingsInput);
         $('#mt_instruction').val(settings.instruction).on('input', onSettingsInput);
+
+        // 搜索测试按钮
+        $('#mt_search_test').on('click', async () => {
+            const btn = $('#mt_search_test');
+            const out = $('#mt_search_test_result');
+            const query = $('#mt_search_test_query').val().trim() || '测试搜索';
+            btn.prop('disabled', true).text('搜索中...');
+            out.html('');
+            const r = await cachedSearch(query);
+            btn.prop('disabled', false).text('测试搜索');
+            if (r.ok) {
+                out.html(`<div class="mt_log_item">✅ ${escapeHtml(r.text.slice(0, 200))}</div>`);
+            } else {
+                out.html(`<div class="mt_log_item">❌ ${escapeHtml(r.error)}</div>`);
+            }
+        });
     } catch (error) {
         // 设置面板加载失败不阻塞核心功能 (工具注册/事件绑定/标记替换)
         console.warn('[MathTools] 设置面板加载失败, 核心功能不受影响:', error);

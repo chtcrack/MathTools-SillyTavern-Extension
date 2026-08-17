@@ -37,6 +37,26 @@
                 </label>
             </div>
             <div class="math_tools_row">
+                <label class="checkbox_label" for="mt_search_enabled">
+                    <input type="checkbox" id="mt_search_enabled">
+                    <span><b>网络搜索</b>(扩展桥): 注册 web_search 工具 + ⟦search⟧ 标记(默认关闭)</span>
+                </label>
+            </div>
+            <div class="math_tools_row" id="mt_search_config">
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    <label for="mt_bridge_url">扩展桥地址</label>
+                    <input type="text" id="mt_bridge_url" class="text_pole" style="width: 180px;" placeholder="http://localhost:8643">
+                    <label for="mt_bridge_token">Bearer Token</label>
+                    <input type="password" id="mt_bridge_token" class="text_pole" style="width: 220px;" placeholder="~/.hermes/scripts/.ext-bridge-token">
+                </div>
+                <div style="display:flex; gap:8px; align-items:center; margin-top:6px;">
+                    <input type="text" id="mt_search_test_query" class="text_pole" style="width: 200px;" placeholder="测试搜索关键词">
+                    <button id="mt_search_test" class="menu_button">测试搜索</button>
+                </div>
+                <div id="mt_search_test_result" style="margin-top:4px;"></div>
+                <small>需扩展桥服务在线(Chrome 扩展 + systemd extension-bridge), 搜索通过 Google 实时执行。</small>
+            </div>
+            <div class="math_tools_row">
                 <label for="mt_code_timeout">代码执行超时(毫秒)</label>
                 <input type="number" id="mt_code_timeout" min="1000" step="1000" class="text_pole" style="width: 120px;">
             </div>
