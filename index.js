@@ -10,7 +10,7 @@
  *    - math_evaluate: 数学表达式计算
  *    - math_execute_code: 沙箱 JS 代码执行 (Web Worker, 无 DOM, 可发网络请求)
  */
-import { eventSource, event_types, chat, saveChatConditional } from '../../../../script.js';
+import { eventSource, event_types, chat, saveChatConditional, saveSettingsDebounced } from '../../../../script.js';
 import { extension_settings, renderExtensionTemplateAsync } from '../../../extensions.js';
 import { ToolManager } from '../../../tool-calling.js';
 import { SlashCommand } from '../../../slash-commands/SlashCommand.js';
@@ -429,6 +429,7 @@ function onSettingsInput() {
     settings.code_timeout = Math.max(1000, Number($('#mt_code_timeout').val()) || 10000);
     settings.instruction = $('#mt_instruction').val();
     extension_settings[extensionName] = settings;
+    saveSettingsDebounced(); // 持久化到 settings.json, 否则刷新后设置丢失
     registerNativeTools();
 }
 
