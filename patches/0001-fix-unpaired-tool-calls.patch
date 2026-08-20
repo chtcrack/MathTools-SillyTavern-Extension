@@ -1,0 +1,62 @@
+diff --git a/public/scripts/openai.js b/public/scripts/openai.js
+index 97b96658e..9fdb036a8 100644
+--- a/public/scripts/openai.js
++++ b/public/scripts/openai.js
+@@ -4042,7 +4042,56 @@ export class ChatCompletion {
+                 this.log(`Skipping invalid or empty message in collection: ${JSON.stringify(item)}`);
+             }
+         }
+-        return chat;
++        return this.ensureToolCallPairing(chat);
++    }
++
++    /**
++     * 修复未配对的 tool_calls (2026-08-17, MathTools patch)
++     *
++     * Bug: 某些失败路径(工具执行后 API 端点出错、生成被中断、saveFunctionToolInvocations
++     * 未执行)会在会话历史里留下 assistant.tool_calls, 但没有对应的 role:'tool' 结果消息。
++     * OpenAI 兼容上游严格校验 "tool_calls 必须后跟 tool 结果", 于是不仅当轮报 400,
++     * 之后每一轮请求都会因为这段残留历史被拒绝, 形成死循环。
++     *
++     * 这里在请求序列化的最后一个环节自动补齐: 为每个缺失结果的 tool_call_id 插入
++     * 一条 role:'tool' 占位消息(放在其 assistant(tool_calls) 之后、下一条消息之前),
++     * 保证发往上游的消息永远配对完整。
++     */
++    ensureToolCallPairing(chat) {
++        const FALLBACK_TOOL_RESULT = '[工具调用结果缺失] 该工具调用因错误中断未产生结果, 请基于现有信息继续。';
++        const result = [];
++        const pending = new Map(); // tool_call_id -> true (尚未配对的调用)
++        for (const message of chat) {
++            // 遇到下一条非 tool 消息时, 若仍有未配对调用, 先在此处补齐占位结果
++            // (使其紧跟对应的 assistant.tool_calls, 符合上游 "tool_calls 后必须跟 tool 结果")
++            // 注意: 合法的 assistant(tool_calls) 之后必然紧跟 tool 消息, 因此一旦出现
++            // 新的 assistant/user 消息而 pending 仍未清空, 即为缺失, 立即补位。
++            if (message.role !== 'tool' && pending.size) {
++                this.repairPendingToolCalls(result, pending, FALLBACK_TOOL_RESULT);
++            }
++            if (Array.isArray(message.tool_calls) && message.role === 'assistant') {
++                for (const tc of message.tool_calls) {
++                    if (tc && tc.id) pending.set(tc.id, true);
++                }
++            }
++            if (message.role === 'tool' && message.tool_call_id) {
++                pending.delete(message.tool_call_id);
++            }
++            result.push(message);
++        }
++        if (pending.size) {
++            this.repairPendingToolCalls(result, pending, FALLBACK_TOOL_RESULT);
++        }
++        return result;
++    }
++
++    /** 为仍挂起的 tool_call_id 补占位 tool 消息, 并清空 pending */
++    repairPendingToolCalls(result, pending, fallback) {
++        for (const id of pending.keys()) {
++            console.warn('[ChatCompletion] 修复未配对 tool_calls, 自动补占位结果:', id);
++            result.push({ role: 'tool', tool_call_id: id, content: fallback });
++        }
++        pending.clear();
+     }
+ 
+     /**

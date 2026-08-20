@@ -139,6 +139,7 @@ MathTools/
 ├── math-parser.js   # 数学表达式解析器(递归下降,含骰子/清洗)
 ├── settings.html    # 设置面板模板
 ├── style.css        # 样式 + 计算结果高亮
+├── patches/         # 对 SillyTavern 核心源码的补丁(可重放,见目录内 README)
 └── tests/           # Node 单元测试
 ```
 
